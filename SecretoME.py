@@ -6,7 +6,7 @@ from datetime import datetime
 import requests
 
 # --- Konfigurasi ---
-SHEET_ID = "1m6MW4u1WFbBMkxiZeqQwAAb7tvI7-BjP4iXmeOR8pX0"
+SHEET_ID = "1ZUjAzAqCEPfkc5Wicn278usNlsQ1wDkbCTsTWgNOjx0"
 
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -77,3 +77,4 @@ try:
         st.info("Belum ada pesan masuk.")
 except Exception as e:
     st.error(f"Gagal membaca data: {e}")
+
