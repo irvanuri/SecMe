@@ -1,21 +1,19 @@
 import streamlit as st
 import gspread
 from google.oauth2.service_account import Credentials
-import pandas as pd
 from datetime import datetime
 import requests
 
-# --- Konfigurasi Google Sheets ---
-SHEET_ID = "1ZUjAzAqCEPfkc5Wicn278usNlsQ1wDkbCTsTWgNOjx0"
-WORKSHEET_NAME = "Sheet"
+# --- Ambil konfigurasi dari secrets.toml ---
+SHEET_ID = st.secrets["app_config"]["sheet_id"]
+WORKSHEET_NAME = st.secrets["app_config"]["worksheet"]
 
-# --- Scope API ---
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly"
 ]
 
-# --- Koneksi Google Sheets (cache biar ringan) ---
+# --- Koneksi Google Sheets ---
 @st.cache_resource
 def get_worksheet():
     creds_dict = st.secrets["gcp_service_account"]
@@ -26,50 +24,37 @@ def get_worksheet():
 
 sheet = get_worksheet()
 
-# --- Ambil IP Address (cache per session) ---
-@st.cache_data
-def get_ip():
+# --- Ambil IP & Lokasi ---
+def get_ip_location():
     try:
-        response = requests.get("https://api.ipify.org?format=json", timeout=3)
-        return response.json().get("ip", "UNKNOWN")
+        res = requests.get("https://ipinfo.io/json", timeout=5)
+        data = res.json()
+        ip = data.get("ip", "UNKNOWN")
+        loc = f"{data.get('city', 'UNKNOWN')}, {data.get('country', 'UNKNOWN')}"
+        return ip, loc
     except:
-        return "UNKNOWN"
+        return "UNKNOWN", "UNKNOWN"
 
-# --- Form Secreto ---
-st.title("💌 Kirim Pesan Anonim")
-st.caption("Tulis pesanmu secara anonim, pesanmu akan tersimpan di Google Sheet!")
+# --- Tampilan Form mirip WA Spam ---
+st.title("💣 Fake WA Spam Form (Demo)")
+st.caption("⚠️ Hanya tampilan, tidak benar-benar mengirim WA. Data tersimpan ke Google Sheets.")
 
-pesan = st.text_area("Tulis pesanmu di sini...", height=150)
+with st.form("wa_form", clear_on_submit=True):
+    nomor = st.text_input("📱 Nomor WhatsApp", placeholder="6281234567890")
+    pesan = st.text_area("💬 Isi Pesan", placeholder="Tulis pesanmu di sini...")
+    setuju = st.checkbox("✅ Saya setuju nomor, pesan, lokasi & IP dicatat")
+    submit = st.form_submit_button("🚀 SPAM NOW!")
 
-if st.button("📩 Kirim Pesan"):
-    if pesan.strip() == "":
-        st.warning("Pesan tidak boleh kosong!")
-    else:
-        waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        ip_address = get_ip()
-        try:
-            sheet.append_row([pesan, waktu, ip_address])
-            st.success("✅ Pesanmu berhasil dikirim!")
-            get_data.clear()  # hapus cache supaya data terbaru terbaca
-        except Exception as e:
-            st.error(f"Gagal menyimpan data: {e}")
-
-# --- Fungsi Ambil Data dengan Cache ---
-@st.cache_data(ttl=60)  # refresh otomatis tiap 60 detik
-def get_data():
-    data = sheet.get_all_records()
-    return pd.DataFrame(data)
-
-# --- Rekapan Pesan ---
-st.subheader("📜 Daftar Pesan Anonim")
-if st.button("🔄 Refresh Data"):
-    get_data.clear()
-
-try:
-    df = get_data()
-    if not df.empty:
-        st.dataframe(df)
-    else:
-        st.info("Belum ada pesan masuk.")
-except Exception as e:
-    st.error(f"Gagal membaca data: {e}")
+    if submit:
+        if not nomor or not pesan:
+            st.warning("Nomor dan pesan wajib diisi!")
+        elif not setuju:
+            st.warning("Anda harus menyetujui sebelum melanjutkan.")
+        else:
+            waktu = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            ip, lokasi = get_ip_location()
+            try:
+                sheet.append_row([nomor, pesan, waktu, ip, lokasi])
+                st.success("✅ Data berhasil disimpan (WA tidak dikirim).")
+            except Exception as e:
+                st.error(f"Gagal menyimpan ke Google Sheets: {e}")
