@@ -7,28 +7,27 @@ import requests
 
 # --- Konfigurasi ---
 SHEET_ID = "1m6MW4u1WFbBMkxiZeqQwAAb7tvI7-BjP4iXmeOR8pX0"
-WORKSHEET_NAME = "Sheeet"
 
 scope = [
     "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/drive.readonly"
 ]
 
-# --- Autentikasi & koneksi Google Sheet (cache resource) ---
+# --- Autentikasi (cache) ---
 @st.cache_resource
 def get_gsheet_client():
     creds_dict = st.secrets["gcp_service_account"]
     creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-    client = gspread.authorize(creds)
-    spreadsheet = client.open_by_key(SHEET_ID)
-    sheet = spreadsheet.worksheet(WORKSHEET_NAME)
-    return sheet
+    return gspread.authorize(creds)
 
-sheet = get_gsheet_client()
+client = get_gsheet_client()
+spreadsheet = client.open_by_key(SHEET_ID)
+sheet = spreadsheet.sheet1  # otomatis ambil tab pertama
 
-# --- Inisialisasi Header jika Sheet Kosong ---
+# --- Inisialisasi Header ---
 try:
-    if sheet.row_count == 0 or sheet.get("A1:C1") == []:
+    headers = sheet.row_values(1)
+    if not headers:
         sheet.append_row(["Pesan", "Waktu", "IP Address"])
 except Exception as e:
     st.error(f"Gagal inisialisasi header: {e}")
@@ -40,7 +39,7 @@ st.caption("Tulis pesanmu secara anonim, pesan akan tersimpan di Google Sheet!")
 
 pesan = st.text_area("Tulis pesanmu di sini...", height=150)
 
-# --- Ambil IP Address ---
+# --- Ambil IP & Lokasi ---
 def get_ip():
     try:
         response = requests.get("https://ipinfo.io/json", timeout=5)
@@ -63,7 +62,7 @@ if st.button("📩 Kirim Pesan"):
         except Exception as e:
             st.error(f"Gagal menyimpan data: {e}")
 
-# --- Ambil Data dari Sheet (cache 30 detik) ---
+# --- Load data (cache 30 detik) ---
 @st.cache_data(ttl=30)
 def load_data():
     return pd.DataFrame(sheet.get_all_records())
@@ -73,7 +72,7 @@ st.subheader("📜 Daftar Pesan Anonim (20 terakhir)")
 try:
     df = load_data()
     if not df.empty:
-        st.dataframe(df.tail(20))  # hanya tampilkan 20 pesan terakhir
+        st.dataframe(df.tail(20))
     else:
         st.info("Belum ada pesan masuk.")
 except Exception as e:
